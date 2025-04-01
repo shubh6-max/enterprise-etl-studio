@@ -1,6 +1,10 @@
 # 🏢 Enterprise ETL Studio
 
-A LangGraph + Streamlit-powered ETL workflow orchestrator with Snowflake, SQL generation, agent-based automation, and UI-based approvals.
+ETL workflow orchestrator with Snowflake, SQL generation, agent-based automation, and UI-based approvals.
+
+## 📊 Workflow Overview
+
+![ETL Workflow](workflowV4.png)
 
 ## 🔧 Features
 - Local or Snowflake input
