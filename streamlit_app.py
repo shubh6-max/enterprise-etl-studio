@@ -87,7 +87,7 @@ if "run_user_input_agent" not in st.session_state:
 # --- Step 1: Data Selection ---
 if source_type == "local":
     st.subheader("📁 Step 1: Select Local CSV Tables")
-    folder_path = st.text_input("Enter folder path with CSV files:", key="folder_path")
+    folder_path = st.text_input("Enter folder path with CSV files:", key="folder_path").replace('"','')
 
     if folder_path and os.path.exists(folder_path):
         if "csv_files" not in st.session_state:
