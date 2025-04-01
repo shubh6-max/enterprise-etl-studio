@@ -288,7 +288,7 @@ if state.get("approval_status_task") == "approved":
 
     recipient_emails = st.text_input("Recipient Emails (comma separated)", key="email_recipient")
 
-    if st.button("Send Email"):
+    if st.button("Send Email (IN DEVELOPMENT)"):
         try:
             recipient_list = [e.strip() for e in recipient_emails.split(",") if e.strip()]
             send_email_with_json(
