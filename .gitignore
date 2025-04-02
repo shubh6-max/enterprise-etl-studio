@@ -15,3 +15,5 @@ __pycache__/
 Fictional Sales Data/
 
 ai_etl\
+
+final_state_snapshots\
