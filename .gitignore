@@ -13,3 +13,5 @@ __pycache__/
 .vscode/
 
 Fictional Sales Data/
+
+ai_etl\
