@@ -10,25 +10,32 @@ class SOPValidatorAgent:
     def __call__(self, state: Dict) -> Dict:
         print("\n🟢 [SOPValidatorAgent] - Applying SQL SOP Enhancements")
 
+        database = state.get("data_source", {}).get("database", [])
+        schema = state.get("data_source", {}).get("schema", [])
         raw_sql = state.get("sql_logic", {}).get("generated_sql", "")
         if not raw_sql:
             raise ValueError("Missing generated SQL in state")
 
         prompt = f"""
-You are a senior data engineer.
+            You are a senior data engineer.
 
-Please refactor the following SQL query to match enterprise-grade standards:
-- Add table aliases
-- Use meaningful column aliases
-- Format the SQL with proper indentation
-- Use explicit JOINs if needed
-- Improve readability and maintainability
+            Please refactor the following SQL query to match enterprise-grade standards:
+            - Add table aliases
+            - Use meaningful column aliases
+            - Format the SQL with proper indentation
+            - Use explicit JOINs if needed
+            - Improve readability and maintainability
+            - Use database,schema for refactor e.g.(database.schema.table)
+            Important:
+                - Use column name in  double quotes
 
-Return only the improved SQL, nothing else.
+            Return only the improved SQL, nothing else.
 
-SQL:
-{raw_sql}
-"""
+            database: {database}
+            schema: {schema}
+            SQL:
+            {raw_sql}
+        """
 
         response = model.invoke(prompt)
 

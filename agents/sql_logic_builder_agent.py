@@ -43,15 +43,24 @@ class SQLLogicBuilderAgent:
 
     def _build_prompt(self, business_problem: str, state: Dict) -> str:
         tables = state.get("data_source", {}).get("tables", [])
-        return f"""
-    You are an expert SQL developer.
+        database = state.get("data_source", {}).get("database", [])
+        schema = state.get("data_source", {}).get("schema", [])
 
-    Based on the business requirement and available tables, write a clean, syntactically correct SQL query.
+        # Extract column names from the sample data and store them in a string
+        column_names_str = ""
+        for table, data in state['sample_data'].items():
+            columns = list(data[0].keys())
+            column_names_str += f"Columns in {table}: {', '.join(columns)}\n"
+        return f"""You are an expert SQL developer.
+
+    Based on the business requirement and available tables, write a clean, syntactically correct snowflake SQL query.
 
     Tables: {", ".join(tables)}
+    Column names: {column_names_str}
     Business requirement: {business_problem}
 
     Important:
+    - create or replace a table
+    - Use column name in  double quotes
     - Do NOT explain anything
-    - Return ONLY the SQL query, no commentary
-    """
+    - Return ONLY the SQL query, no commentary"""

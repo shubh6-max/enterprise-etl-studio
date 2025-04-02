@@ -14,6 +14,7 @@ from agents.sql_logic_builder_agent import SQLLogicBuilderAgent
 from agents.sop_validator_agent import SOPValidatorAgent
 from agents.scheduler_agent import SchedulerAgent
 from agents.csv_uploader_agent import CSVUploaderAgent
+from agents.sql_executor_agent import SQLExecutorAgent
 
 from utils.snowflake_utils import get_snowflake_tables
 from utils.email_utils import send_email_with_json
@@ -207,6 +208,23 @@ if "sop_sql" in state and "approval_status_sop" not in state:
             st.stop()
 
 
+# --- Optional: Run Refined SQL in Snowflake ---
+if state.get("approval_status_sop") == "approved" and "sql_result" not in state:
+    st.subheader("🧪 Execute Refined SQL")
+    if st.button("▶️ Run SQL on Snowflake"):
+        from agents.sql_executor_agent import SQLExecutorAgent
+        result = SQLExecutorAgent()(state)
+        state.update(result)
+        state["step_outputs"]["sql_executor"] = state["sql_result"]
+        st.rerun()
+
+if "sql_result" in state:
+    if "error" in state["sql_result"]:
+        st.error(f"❌ SQL Error: {state['sql_result']['error']}")
+    else:
+        st.success(f"✅ {state['sql_result']['row_count']} rows returned.")
+        st.dataframe(pd.DataFrame(state["sql_result"]["preview"]))
+
 # --- Step 5: Upload CSVs to Snowflake ---
 if state.get("approval_status_sop") == "approved" and state.get("data_source", {}).get("type") == "local" and "csv_upload" not in state:
     st.subheader("📤 Upload Local CSVs to Snowflake")
@@ -222,7 +240,7 @@ if state.get("approval_status_sop") == "approved" and state.get("data_source", {
         }
         uploader = CSVUploaderAgent(input_mode="streamlit")
         progress_bar = st.progress(0, text="Preparing upload...")
-        result = uploader(state, progress_bar=progress_bar)
+        result = uploader(state)
         state.update(result)
         state["step_outputs"]["csv_uploader"] = state.get("csv_upload", {})
 
@@ -271,10 +289,25 @@ if state.get("approval_status_task") == "approved":
     final_state = {k: v for k, v in state.items() if k != "step_outputs"}
     st.json(final_state)
 
+    # Folder path where you want to save the JSON file
+    folder_path = "final_state_snapshots/"
+    # Ensure the folder exists
+    os.makedirs(folder_path, exist_ok=True)
+    
     task_name = final_state.get("task_status", {}).get("task_name", "etl")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{task_name}_{timestamp}.json"
+
+    # Full file path
+    file_path = os.path.join(folder_path, filename)
+
     json_bytes = json.dumps(final_state, indent=2).encode("utf-8")
+
+    # Write the JSON bytes to the file
+    with open(file_path, "wb") as f:
+        f.write(json_bytes)
+
+    print(f"JSON file saved to {file_path}")
 
     st.download_button(
         label="📥 Download Summary JSON",
