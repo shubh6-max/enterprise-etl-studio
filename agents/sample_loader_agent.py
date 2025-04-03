@@ -45,7 +45,8 @@ class SampleLoaderAgent:
         return {
             **state,
             "sample_data": sample_data,
-            "current_step": "sample_loader"
+            "current_step": "sample_loader",
+            "output": sample_data   # ✅ Needed for run_agent_step_with_ui
         }
 
     def _load_from_snowflake(self, database: str, schema: str, tables: list, state: Dict) -> Dict:
@@ -70,5 +71,5 @@ class SampleLoaderAgent:
         return {
             **state,
             "sample_data": sample_data,
-            "current_step": "sample_loader"
+            "current_step": "sample_loader",
         }

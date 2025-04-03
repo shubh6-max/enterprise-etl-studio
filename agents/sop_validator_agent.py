@@ -13,6 +13,19 @@ class SOPValidatorAgent:
         database = state.get("data_source", {}).get("database", [])
         schema = state.get("data_source", {}).get("schema", [])
         raw_sql = state.get("sql_logic", {}).get("generated_sql", "")
+        enterprise_metadata = state.get("enterprise_metadata", {})
+
+        table_descriptions = ""
+
+        for table, columns in enterprise_metadata.items():
+            column_lines = "\n".join(
+                [f"  - {col['column_name']} ({col['data_type']})" for col in columns]
+            )
+            table_descriptions += f"\nTable `{table}`:\n{column_lines}\n"
+            
+        print(table_descriptions)
+
+
         if not raw_sql:
             raise ValueError("Missing generated SQL in state")
 
@@ -25,17 +38,18 @@ class SOPValidatorAgent:
             - Format the SQL with proper indentation
             - Use explicit JOINs if needed
             - Improve readability and maintainability
-            - Use database,schema for refactor e.g.(database.schema.table)
-            Important:
-                - Use column name in  double quotes
+            - Fully qualify tables as {database}.{schema}.table_name
+            - Use column names and table name in double quotes
+            - DO NOT change business logic
 
-            Return only the improved SQL, nothing else.
+            Available tables: {table_descriptions}
 
-            database: {database}
-            schema: {schema}
             SQL:
             {raw_sql}
-        """
+
+            Only return the final, cleaned SQL. No explanation.
+            """
+
 
         response = model.invoke(prompt)
 
@@ -48,10 +62,15 @@ class SOPValidatorAgent:
         sop_sql = sop_sql.rstrip(";")
 
         return {
-            **state,
-            "sop_sql": {
-                "original_sql": raw_sql,
-                "refined_sql": sop_sql
-            },
-            "current_step": "sop_validator"
-        }
+                **state,
+                "sop_sql": {
+                    "original_sql": raw_sql,
+                    "refined_sql": sop_sql
+                },
+                "output": {
+                    "original_sql": raw_sql,
+                    "refined_sql": sop_sql
+                },
+                "current_step": "sop_validator"
+            }
+

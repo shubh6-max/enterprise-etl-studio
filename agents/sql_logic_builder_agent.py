@@ -1,5 +1,6 @@
 from typing import Dict
 from utils.llm_provider import model
+import json
 
 class SQLLogicBuilderAgent:
     """
@@ -42,25 +43,62 @@ class SQLLogicBuilderAgent:
 
 
     def _build_prompt(self, business_problem: str, state: Dict) -> str:
-        tables = state.get("data_source", {}).get("tables", [])
-        database = state.get("data_source", {}).get("database", [])
-        schema = state.get("data_source", {}).get("schema", [])
+        # tables = state.get("data_source", {}).get("tables", [])
+        database = state.get("data_source", {}).get("database", "")
+        schema = state.get("data_source", {}).get("schema", "")
+        # column_suggestions = state.get("llm_column_suggestions", {})
 
-        # Extract column names from the sample data and store them in a string
-        column_names_str = ""
-        for table, data in state['sample_data'].items():
-            columns = list(data[0].keys())
-            column_names_str += f"Columns in {table}: {', '.join(columns)}\n"
-        return f"""You are an expert SQL developer.
+        table_descriptions = ""
 
-    Based on the business requirement and available tables, write a clean, syntactically correct snowflake SQL query.
+        # for table in tables:
+        #     try:
+        #         parsed = json.loads(column_suggestions[table]) if isinstance(column_suggestions[table], str) else column_suggestions[table]
+        #         columns = parsed["columns"]
 
-    Tables: {", ".join(tables)}
-    Column names: {column_names_str}
-    Business requirement: {business_problem}
+        #         column_lines = "\n".join(
+        #             [f'  - {col["column_name"]} ({col["data_type"]}) ← originally {col["original_column"]}' for col in columns]
+        #         )
 
-    Important:
-    - create or replace a table
-    - Use column name in  double quotes
-    - Do NOT explain anything
-    - Return ONLY the SQL query, no commentary"""
+        #         table_descriptions += f"\nTable `{table}`:\n{column_lines}\n"
+
+        #     except Exception as e:
+        #         table_descriptions += f"\n⚠️ Could not parse column suggestions for `{table}`: {e}\n"
+
+        enterprise_metadata = state.get("enterprise_metadata", {})
+        table_descriptions = ""
+
+        for table, columns in enterprise_metadata.items():
+            column_lines = "\n".join(
+                [f"  - {col['column_name']} ({col['data_type']})" for col in columns]
+            )
+            table_descriptions += f"\nTable `{table}`:\n{column_lines}\n"
+            
+        print(table_descriptions)
+
+
+        prompt = f"""
+    You are a senior Snowflake SQL developer.
+
+    Use the following metadata to write a **clean CREATE OR REPLACE TABLE SQL query**:
+
+    Database: {database}
+    Schema: {schema}
+    Tables:
+    {table_descriptions}
+
+    🧠 Business Requirement:
+    {business_problem}
+
+    🛠️ Guidelines:
+    - Use ONLY the table names and columns listed above
+    - Use table and column aliases for readability
+    - Always qualify tables with "{database}.{schema}" (e.g. {database}.{schema}.table_name)
+    - Format the SQL professionally (indentation, joins, aliases)
+    - Do NOT include any explanation or comments
+    - Return ONLY the final SQL query
+
+    """.strip()
+
+        return prompt
+
+

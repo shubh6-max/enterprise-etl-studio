@@ -29,6 +29,8 @@ class UserInputAgent:
             folder_path = config.get("folder_path")
             tables = config.get("tables", [])
             csv_files = config.get("available_files", [])
+            database = config.get("database")  # ✅ add this
+            schema = config.get("schema")      # ✅ add this
 
             if not folder_path or not tables:
                 raise ValueError("Missing folder_path or tables in user_input_config (streamlit mode)")
@@ -39,36 +41,13 @@ class UserInputAgent:
                     "type": "local",
                     "folder_path": folder_path,
                     "tables": tables,
-                    "available_files": csv_files
+                    "available_files": csv_files,
+                    "database": database,  # ✅ include it in state
+                    "schema": schema       # ✅ include it in state
                 },
                 "current_step": "user_input"
             }
 
-        # Original CLI mode (unchanged)
-        folder_path = input("📁 Enter folder path: ").strip()
-        if not os.path.exists(folder_path):
-            raise FileNotFoundError(f"Folder not found: {folder_path}")
-
-        files = os.listdir(folder_path)
-        csv_files = [f for f in files if f.endswith(".csv")]
-
-        print("\n📦 Found CSV files:")
-        for f in csv_files:
-            print(f" - {f}")
-
-        tables_input = input("\n📋 Enter filenames to use as tables (without .csv, comma-separated): ").strip()
-        tables = [t.strip() for t in tables_input.split(",") if t.strip()]
-
-        return {
-            **state,
-            "data_source": {
-                "type": "local",
-                "folder_path": folder_path,
-                "tables": tables,
-                "available_files": csv_files
-            },
-            "current_step": "user_input"
-        }
 
 
     def _handle_snowflake(self, state: Dict) -> Dict:
