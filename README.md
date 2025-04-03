@@ -4,7 +4,7 @@ ETL workflow orchestrator with Snowflake, SQL generation, agent-based automation
 
 ## 📊 Workflow Overview
 
-![ETL Workflow](workflowV4.png)
+![ETL Workflow](workflowV5.png)
 
 ## 🔧 Features
 - Local or Snowflake input
