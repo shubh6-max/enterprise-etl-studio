@@ -1,23 +1,8 @@
-# import os
-# from langchain_together import ChatTogether
-# from dotenv import load_dotenv
-
-# load_dotenv()
-
-# llm = ChatTogether(
-#     model="meta-llama/Llama-3.3-70B-Instruct-Turbo",  # Or "meta-llama/Llama-3-70b-chat-hf"
-#     temperature=0.1,
-#     max_tokens=1024,
-#     together_api_key=os.getenv("TOGETHER_API_KEY"),
-# )
-
-
-# Initialize the Groq LLM using the LLaMA3 70B model with 8192 token context window
 import os
 from dotenv import load_dotenv
 
 from langchain.chat_models import ChatOpenAI
-from langchain_community.chat_models import ChatAnthropic
+from langchain_community.chat_models import ChatOpenAI
 from langchain_together import ChatTogether
 from langchain_groq import ChatGroq  # Groq LLM wrapper for LangChain
 from langchain_community.chat_models import ChatFireworks
