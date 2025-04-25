@@ -1,36 +1,57 @@
-from typing import Dict
-from utils.llm_provider import model
+# agents/sql_logic_builder_agent.py
+
+from typing import Dict, Any
+from utils.llm_provider import model  # uses dynamic provider (Groq, Together, etc.)
 import json
+import datetime
+
+AGENT_STATE_HINT = {
+    "requires": ["raw_prompt", "mentioned_tables", "raw_metadata", "sample_records"],
+    "produces": ["sql_logic"]
+}
 
 class SQLLogicBuilderAgent:
-    """
-    Converts user-described business logic into raw SQL using Groq-hosted LLM.
-    """
-
-    def __init__(self, input_mode="cli"):
+    def __init__(self, input_mode="streamlit"):
         self.input_mode = input_mode
 
-    def __call__(self, state: Dict) -> Dict:
-        print("\n🟣 [SQLLogicBuilderAgent] - Building SQL from business problem")
+    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        print("\n🟣 [SQLLogicBuilderAgent] - Generating SQL")
 
-        if self.input_mode == "cli":
-            problem = input("🧠 Describe your business logic (natural language): ").strip()
+        # 🧠 Extract state inputs
+        problem = state.get("raw_prompt")
+        database = state.get("selected_database", "")
+        schema = state.get("selected_schema", "")
+        tables = state.get("mentioned_tables", [])
+        metadata = state.get("raw_metadata", {})
+        sample_data = state.get("sample_records", {})
+        output_table = state.get("output_table_name", "fact_result_table")
 
-        elif self.input_mode == "streamlit":
-            config = state.get("sql_logic_config", {})
-            problem = config.get("problem_statement")
+        if not problem or not tables or not metadata:
+            raise ValueError("❌ Missing required fields for SQL generation")
+        
 
-            if not problem:
-                raise ValueError("Missing 'problem_statement' in sql_logic_config (streamlit mode)")
+        # 🛠️ Build the final SQL generation prompt
+        prompt = self._build_prompt(
+            problem, database, schema, tables, metadata, sample_data, output_table
+        )
 
-        else:
-            raise ValueError(f"Unsupported input_mode: {self.input_mode}")
-
-        prompt = self._build_prompt(problem, state)
-
-        # Call Groq LLM
+        # 🧠 LLM call
         response = model.invoke(prompt)
-        sql_code = response.content.strip()
+        sql_code = response.content.strip().replace(";","")
+
+        # Inside SQLLogicBuilderAgent.__call__ method, just before the return
+        updated_state = {
+            **state,
+            "sql_logic": {
+                "problem_statement": problem,
+                "generated_sql": sql_code
+            },
+            "current_step": "sql_logic_builder"
+        }
+
+        # 🔽 Save JSON here
+        with open("test.json", "w") as f:
+            json.dump(updated_state, f, indent=4, default=str)
 
         return {
             **state,
@@ -41,64 +62,47 @@ class SQLLogicBuilderAgent:
             "current_step": "sql_logic_builder"
         }
 
+    def _build_prompt(self, business_problem, database, schema, tables, metadata, sample_data, output_table):
+        table_details = ""
+        for table in tables:
+            columns = metadata.get(table, [])
+            sample_rows = sample_data.get(table, [])
 
-    def _build_prompt(self, business_problem: str, state: Dict) -> str:
-        # tables = state.get("data_source", {}).get("tables", [])
-        database = state.get("data_source", {}).get("database", "")
-        schema = state.get("data_source", {}).get("schema", "")
-        # column_suggestions = state.get("llm_column_suggestions", {})
-
-        table_descriptions = ""
-
-        # for table in tables:
-        #     try:
-        #         parsed = json.loads(column_suggestions[table]) if isinstance(column_suggestions[table], str) else column_suggestions[table]
-        #         columns = parsed["columns"]
-
-        #         column_lines = "\n".join(
-        #             [f'  - {col["column_name"]} ({col["data_type"]}) ← originally {col["original_column"]}' for col in columns]
-        #         )
-
-        #         table_descriptions += f"\nTable `{table}`:\n{column_lines}\n"
-
-        #     except Exception as e:
-        #         table_descriptions += f"\n⚠️ Could not parse column suggestions for `{table}`: {e}\n"
-
-        enterprise_metadata = state.get("enterprise_metadata", {})
-        table_descriptions = ""
-
-        for table, columns in enterprise_metadata.items():
             column_lines = "\n".join(
-                [f"  - {col['column_name']} ({col['data_type']})" for col in columns]
+                [f"  - {col['name']} ({col['type']})" for col in columns]
             )
-            table_descriptions += f"\nTable `{table}`:\n{column_lines}\n"
-            
-        print(table_descriptions)
+            sample_lines = json.dumps(
+                sample_rows[:3],
+                indent=2,
+                default=str  # ✅ simple fix: converts dates to strings
+            ) if sample_rows else "(no samples)"
 
+            table_details += f"\n\n📌 Table `{table}`:\nColumns:\n{column_lines}\nSample:\n{sample_lines}\n"
 
-        prompt = f"""
-    You are a senior Snowflake SQL developer.
+        return f"""
+You are a Snowflake SQL expert.
 
-    Use the following metadata to write a **clean CREATE OR REPLACE TABLE SQL query**:
+Given the following structured inputs, generate a **robust SQL query** using professional formatting, CTEs if needed, and Snowflake best practices:
 
-    Database: {database}
-    Schema: {schema}
-    Tables:
-    {table_descriptions}
+📂 Database: {database}
+📁 Schema: {schema}
+🧠 Business Requirement: {business_problem}
+📝 Output Table: {output_table}
 
-    🧠 Business Requirement:
-    {business_problem}
+{table_details}
 
-    🛠️ Guidelines:
-    - Use ONLY the table names and columns listed above
-    - Use table and column aliases for readability
-    - Always qualify tables with "{database}.{schema}" (e.g. {database}.{schema}.table_name)
-    - Format the SQL professionally (indentation, joins, aliases)
-    - Do NOT include any explanation or comments
-    - Return ONLY the final SQL query
+🛠️ Rules:
+- Use only the provided tables/columns
+- Use aliases and indentation for readability
+- Always qualify tables as `{database}.{schema}.table`
+- Create meaningful CTEs for modular logic
+- ❗ When creating a target table, always use `CREATE OR REPLACE TABLE ... AS WITH ... SELECT ...` syntax
+- Do NOT use `CREATE TABLE ... (cols) WITH ... SELECT ...` — it's not valid in Snowflake
+- Do NOT use `SELECT INTO`, `INSERT INTO`, or `MERGE`
+- Do NOT use `CREATE TABLE IF NOT EXISTS`
+- Do NOT include explanations or markdown
+- Do NOT use the SQL with a `;` — it may break parser compatibility
 
-    """.strip()
-
-        return prompt
-
+Return only the final SQL query using valid Snowflake syntax.
+""".strip()
 

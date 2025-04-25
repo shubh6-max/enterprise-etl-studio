@@ -6,61 +6,61 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_together import ChatTogether
 from langchain_groq import ChatGroq  # Groq LLM wrapper for LangChain
 from langchain_community.chat_models import ChatFireworks
+from langchain_anthropic import ChatAnthropic
+
 
 load_dotenv()
 
 # 🔁 LLM SWITCH CONFIGURATION
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()  # Options: groq, together, anthropic, openai, fireworks
+# LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()  # Options: groq, together, anthropic, openai, fireworks
 # LLM_MODEL = os.getenv("LLM_MODEL", "mixtral-8x7b-32768")  # Model name override
 
-LLM_MODEL_ChatGroq= "llama-3.3-70b-versatile"     # deepseek-r1-distill-llama-70b
+LLM_MODEL_ChatGroq= "llama-3.3-70b-versatile"    # deepseek-r1-distill-llama-70b   #meta-llama/llama-4-maverick-17b-128e-instruct   "llama-3.3-70b-versatile"
 LLM_MODEL_ChatTogether= "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 LLM_MODEL_ChatAnthropic= "claude-3-7-sonnet-20250219"
 LLM_MODEL_ChatOpenAI= "gpt-3.5-turbo"
 LLM_MODEL_ChatFireworks= "accounts/fireworks/models/deepseek-v3-0324"
 
+def get_llm():
+    provider = os.getenv("LLM_PROVIDER_groq", "together").lower()
 
+    if provider == "groq":
+        return ChatGroq(
+            temperature=0,
+            model_name= LLM_MODEL_ChatGroq,
+            api_key=os.getenv("GROQ_API_KEY_1")
+        )
 
+    elif provider == "together":
+        return ChatTogether(
+            temperature=0,
+            model= LLM_MODEL_ChatTogether,  # example
+            api_key=os.getenv("TOGETHER_API_KEY")
+        )
 
-# 🔌 GROQ
-if LLM_PROVIDER == "groq":
-    model = ChatGroq(
-        model=LLM_MODEL_ChatGroq,  # e.g., "mixtral-8x7b-32768"
-        temperature=0.2,
-        api_key=os.getenv("GROQ_API_KEY")
-    )
+    elif provider == "fireworks":
+        return ChatFireworks(
+            temperature=0,
+            model= LLM_MODEL_ChatFireworks,
+            api_key=os.getenv("FIREWORKS_API_KEY")
+        )
 
-# 🤖 TOGETHER
-elif LLM_PROVIDER == "together":
-    model = ChatTogether(
-        model=LLM_MODEL_ChatTogether,  # e.g., "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-        temperature=0.2,
-        together_api_key=os.getenv("TOGETHER_API_KEY")
-    )
+    elif provider == "openai":
+        return ChatOpenAI(
+            temperature=0,
+            model= LLM_MODEL_ChatOpenAI,
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
 
-# 🔵 ANTHROPIC
-elif LLM_PROVIDER == "anthropic":
-    model = ChatAnthropic(
-        model=LLM_MODEL_ChatAnthropic,  # e.g., "claude-3-opus-20240229"
-        temperature=0.2,
-        api_key=os.getenv("ANTHROPIC_API_KEY")
-    )
+    elif provider == "anthropic":
+        return ChatAnthropic(
+            temperature=0,
+            model= LLM_MODEL_ChatAnthropic,  # or haiku/sonnet
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
 
-# 🔓 OPENAI
-elif LLM_PROVIDER == "openai":
-    model = ChatOpenAI(
-        model=LLM_MODEL_ChatOpenAI,  # e.g., "gpt-3.5-turbo"
-        temperature=0.2,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    else:
+        raise ValueError(f"❌ Unsupported LLM_PROVIDER: {provider}")
 
-# 🚀 FIREWORKS
-elif LLM_PROVIDER == "fireworks":
-    model = ChatFireworks(
-        model=LLM_MODEL_ChatFireworks,  # e.g., "accounts/fireworks/models/deepseek-r1"
-        temperature=0.2,
-        api_key=os.getenv("FIREWORKS_API_KEY")
-    )
-
-else:
-    raise ValueError(f"Unsupported LLM provider: {LLM_PROVIDER}")
+# Optional default
+model = get_llm()

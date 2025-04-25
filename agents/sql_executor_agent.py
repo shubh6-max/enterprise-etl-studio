@@ -1,74 +1,73 @@
-from typing import Dict
+# agents/sql_executor_agent.py
+
+from typing import Dict, Any
 import pandas as pd
 from utils.snowflake_utils import get_snowflake_connection
 
-class SQLExecutorAgent:
-    """
-    Executes the SQL query and returns results as DataFrame.
-    """
+AGENT_STATE_HINT = {
+    "requires": ["sop_sql", "selected_database", "selected_schema"],
+    "produces": ["sql_result"]
+}
 
-    def __call__(self, state: Dict) -> Dict:
+def SQLExecutorAgent():
+    def invoke(state: Dict[str, Any]) -> Dict[str, Any]:
+        print("\n🟣 [SQLExecutorAgent] - Executing final SQL...")
+
         sql = state.get("sop_sql", {}).get("refined_sql", "")
-        sql = sql.replace("```sql", "").replace("```", "").strip().rstrip(";")
-
         if not sql:
-            raise ValueError("❌ No generated SQL found to execute")
+            raise ValueError("❌ No SQL found in `sop_sql.refined_sql`")
+
+        # Clean SQL block markers if any
+        sql = sql.replace("```sql", "").replace("```", "").strip().replace(";","")
+
+        db = state.get("selected_database")
+        schema = state.get("selected_schema")
 
         try:
             conn = get_snowflake_connection()
 
-            # Set context
+            # Context setup
             cursor = conn.cursor()
-            cursor.execute(f"USE DATABASE {state['data_source']['database']}")
-            cursor.execute(f"USE SCHEMA {state['data_source']['schema']}")
+            if db:
+                cursor.execute(f"USE DATABASE {db}")
+            if schema:
+                cursor.execute(f"USE SCHEMA {schema}")
             cursor.close()
 
-            # Run SQL
+            # Execute SQL and fetch
             df = pd.read_sql(sql, conn)
             conn.close()
 
-            return {
-                **state,
-                "sql_result": {
-                    "row_count": len(df),
-                    "columns": list(df.columns),
-                    "preview": df.head(100).to_dict(orient="records")
-                },
-                "current_step": "sql_executor",
-                "output": {
-                    "row_count": len(df),
-                    "columns": list(df.columns),
-                    "preview": df.head(10).to_dict(orient="records")
-                },
-                "step_outputs": {
-                    **state.get("step_outputs", {}),
-                    "sql_executor": {
-                        "row_count": len(df),
-                        "columns": list(df.columns),
-                        "preview": df.head(10).to_dict(orient="records")
-                    }
-                }
-            }
+            result_preview = df.head(10).to_dict(orient="records")
 
+            preview_text = pd.DataFrame(df.head(5)).to_markdown(index=False)
+
+            state["chatbot_messages"].append({
+                "sender": "assistant",
+                "text": f"📊 Executed SQL! Here's a preview of the result:\n\n{preview_text}"
+            })
+
+            state["sql_execution_done"] = True
+            
+            print(f"✅ SQL executed successfully. Rows: {len(df)}")
+
+            state["sql_result"] = {
+                "row_count": len(df),
+                "columns": list(df.columns),
+                "preview": result_preview
+            }
 
         except Exception as e:
-            return {
-                **state,
-                "sql_result": {
-                    "error": str(e),
-                    "preview": []
-                },
-                "current_step": "sql_executor",
-                "output": {
-                    "error": str(e),
-                    "preview": []
-                },
-                "step_outputs": {
-                    **state.get("step_outputs", {}),
-                    "sql_executor": {
-                        "error": str(e),
-                        "preview": []
-                    }
-                }
+            print(f"❌ SQL execution error: {e}")
+            state["sql_result"] = {
+                "error": str(e),
+                "preview": []
             }
+            state["chatbot_messages"].append({
+                "sender": "assistant",
+                "text": f"❌ Error while executing SQL: `{str(e)}`"
+                })
 
+        return state
+
+    return invoke

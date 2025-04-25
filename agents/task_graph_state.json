@@ -1,0 +1,63 @@
+{
+    "staging_tables": [
+        {
+            "table_name": "SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info",
+            "original_cte_name": "customer_info",
+            "create_statement": "CREATE OR REPLACE TRANSIENT TABLE SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info AS SELECT * FROM customers",
+            "depends_on": [],
+            "is_final_table": false
+        },
+        {
+            "table_name": "SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details",
+            "original_cte_name": "order_details",
+            "create_statement": "CREATE OR REPLACE TRANSIENT TABLE SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details AS SELECT * FROM orders",
+            "depends_on": [
+                "SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info"
+            ],
+            "is_final_table": false
+        }
+    ],
+    "final_table": {
+        "table_name": "SAMPLE_DB.SAMPLE_SCHEMA.customer_orders",
+        "original_cte_name": "customer_orders",
+        "create_statement": "CREATE OR REPLACE TABLE SAMPLE_DB.SAMPLE_SCHEMA.customer_orders AS SELECT c.*, o.* FROM SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info c JOIN SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details o ON c.id = o.customer_id",
+        "depends_on": [
+            "SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info",
+            "SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details"
+        ],
+        "is_final_table": true
+    },
+    "warehouse": "COMPUTE_WH",
+    "schedule": "5 MINUTE",
+    "task_sqls": [
+        "\n        CREATE OR REPLACE TASK ETL_stg_customer_info\n            WAREHOUSE = COMPUTE_WH\n            SCHEDULE = '1 MINUTE'\n            AS\n            CREATE OR REPLACE TRANSIENT TABLE SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info AS SELECT * FROM customers;\n        ",
+        "\n        CREATE OR REPLACE TASK ETL_stg_order_details\n            WAREHOUSE = COMPUTE_WH\n            AFTER ETL_stg_customer_info\n            AS\n            CREATE OR REPLACE TRANSIENT TABLE SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details AS SELECT * FROM orders;\n        ",
+        "\n        CREATE OR REPLACE TASK FINAL_customer_orders\n            WAREHOUSE = COMPUTE_WH\n            AFTER ETL_stg_customer_info, ETL_stg_order_details\n            AS\n            CREATE OR REPLACE TABLE SAMPLE_DB.SAMPLE_SCHEMA.customer_orders AS SELECT c.*, o.* FROM SAMPLE_DB.SAMPLE_SCHEMA.stg_customer_info c JOIN SAMPLE_DB.SAMPLE_SCHEMA.stg_order_details o ON c.id = o.customer_id;\n        ",
+        "ALTER TASK ETL_stg_customer_info RESUME;",
+        "ALTER TASK ETL_stg_order_details RESUME;",
+        "ALTER TASK FINAL_customer_orders RESUME;"
+    ],
+    "task_graph": {
+        "ETL_stg_customer_info": {
+            "dependencies": [],
+            "is_root": true,
+            "is_final": false
+        },
+        "ETL_stg_order_details": {
+            "dependencies": [
+                "ETL_stg_customer_info"
+            ],
+            "is_root": false,
+            "is_final": false
+        },
+        "FINAL_customer_orders": {
+            "dependencies": [
+                "ETL_stg_customer_info",
+                "ETL_stg_order_details"
+            ],
+            "is_root": false,
+            "is_final": true
+        }
+    },
+    "current_step": "sql_task_graph"
+}
