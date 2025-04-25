@@ -28,7 +28,7 @@ def get_llm():
         return ChatGroq(
             temperature=0,
             model_name= LLM_MODEL_ChatGroq,
-            api_key=os.getenv("GROQ_API_KEY_1")
+            api_key=os.getenv("GROQ_API_KEY")
         )
 
     elif provider == "together":
