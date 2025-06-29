@@ -1,10 +1,22 @@
-from langgraph.graph import StateGraph, END
+"""Utilities to assemble the ETL LangGraph workflow.
+
+This module wires up all the available agents into a :class:`StateGraph` and
+routes between them using the planner.  The goal is to keep the graph
+construction in one place and make it easy to modify the workflow order.
+"""
+
+from typing import Callable, Dict
+
+from langgraph.graph import END, StateGraph
+
 from core.state_schema import StateSchema
 from agents.planner_agent import planner_router
 from agents.input_understanding_agent import InputUnderstandingAgent
 from agents.user_confirmation_agent import UserConfirmationAgent
 from agents.metadata_fetcher_agent import MetadataFetcherAgent
-from agents.post_metadata_confirmation_agent import PostMetadataConfirmationAgent
+from agents.post_metadata_confirmation_agent import (
+    PostMetadataConfirmationAgent,
+)
 from agents.sample_loader_agent import SampleLoaderAgent
 from agents.post_sample_confirmation_agent import PostSampleConfirmationAgent
 # from agents.refined_prompt_builder_agent import RefinedPromptBuilderAgent
@@ -22,54 +34,65 @@ def workflow_complete_agent(state: StateSchema) -> StateSchema:
     })
     return state
 
-def build_etl_graph():
+# Map agent name to the callable that creates the agent.
+AGENT_CONSTRUCTORS: Dict[str, Callable[[], Callable]] = {
+    "input_understanding_agent": InputUnderstandingAgent,
+    "user_confirmation_agent": UserConfirmationAgent,
+    "metadata_fetcher_agent": MetadataFetcherAgent,
+    "post_metadata_confirmation_agent": PostMetadataConfirmationAgent,
+    "sample_loader_agent": SampleLoaderAgent,
+    "post_sample_confirmation_agent": PostSampleConfirmationAgent,
+    # "refined_prompt_builder_agent": RefinedPromptBuilderAgent,
+    "sql_logic_builder_agent": SQLLogicBuilderAgent,
+    "sop_validator_agent": SOPValidatorAgent,
+    "sql_executor_agent": SQLExecutorAgent,
+    "cte_extractor_agent": CTEExtractorAgent,
+    "sql_task_graph_agent": SQLTaskGraphAgentInvoke,
+}
+
+# Order in which agents should be executed. The planner will decide whether an
+# agent actually runs based on the current state, but defining the order keeps
+# the graph deterministic.
+AGENT_ORDER = [
+    "input_understanding_agent",
+    "user_confirmation_agent",
+    "metadata_fetcher_agent",
+    "post_metadata_confirmation_agent",
+    "sample_loader_agent",
+    "post_sample_confirmation_agent",
+    # "refined_prompt_builder_agent",
+    "sql_logic_builder_agent",
+    "sop_validator_agent",
+    "sql_executor_agent",
+    "cte_extractor_agent",
+    "sql_task_graph_agent",
+]
+
+
+def build_etl_graph() -> StateGraph:
+    """Compile and return the ETL workflow graph."""
+
     builder = StateGraph(StateSchema)
 
-    # 🔵 Entry node — ONLY runs once
-    builder.add_node("input_understanding_agent", InputUnderstandingAgent())
-    builder.set_entry_point("input_understanding_agent")
+    # Add nodes based on AGENT_ORDER
+    for name in AGENT_ORDER:
+        builder.add_node(name, AGENT_CONSTRUCTORS[name]())
 
-    # 🧠 All other agents
-    builder.add_node("user_confirmation_agent", UserConfirmationAgent())
-    builder.add_node("metadata_fetcher_agent", MetadataFetcherAgent())
-    builder.add_node("post_metadata_confirmation_agent", PostMetadataConfirmationAgent())
-    builder.add_node("sample_loader_agent", SampleLoaderAgent())
-    builder.add_node("post_sample_confirmation_agent", PostSampleConfirmationAgent())
-    # builder.add_node("refined_prompt_builder_agent", RefinedPromptBuilderAgent())
-    builder.add_node("sql_logic_builder_agent", SQLLogicBuilderAgent())
-    builder.add_node("sop_validator_agent", SOPValidatorAgent())
-    builder.add_node("sql_executor_agent", SQLExecutorAgent())
-    builder.add_node("cte_extractor_agent", CTEExtractorAgent())
-    builder.add_node("sql_task_graph_agent", SQLTaskGraphAgentInvoke())
-
+    # Completion node
     builder.add_node("workflow_complete_agent", workflow_complete_agent)
 
-    # 📍 Conditional routing for all agents EXCEPT the entry
-    conditional_agents = [
-        "user_confirmation_agent",
-        "metadata_fetcher_agent",
-        "post_metadata_confirmation_agent",
-        "sample_loader_agent",
-        "post_sample_confirmation_agent",
-        # "refined_prompt_builder_agent",
-        "sql_logic_builder_agent",
-        "sop_validator_agent",
-        "sql_executor_agent",
-        "cte_extractor_agent",
-        "sql_task_graph_agent"
-    ]
+    # Set entry point
+    builder.set_entry_point("input_understanding_agent")
 
+    # Set up conditional edges so each agent hands control back to the planner
     all_agents = {
-        agent_name: agent_name for agent_name in conditional_agents + ["workflow_complete_agent"]
+        name: name for name in AGENT_ORDER[1:] + ["workflow_complete_agent"]
     }
 
-    for agent_name in conditional_agents:
-        builder.add_conditional_edges(agent_name, planner_router, all_agents)
+    for name in AGENT_ORDER:
+        builder.add_conditional_edges(name, planner_router, all_agents)
 
-    # ✅ InputUnderstandingAgent → planner
-    builder.add_conditional_edges("input_understanding_agent", planner_router, all_agents)
-
-    # 🛑 End state
+    # End state
     builder.add_edge("workflow_complete_agent", END)
 
     return builder.compile()
